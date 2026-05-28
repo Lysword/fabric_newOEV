@@ -1,0 +1,21 @@
+{
+  "account_start_id": 1,
+  "account_count": 100,
+  "operation_count": 1000,
+  "seed": 7,
+  "hot_account_ratio": 0.1,
+  "conflict_rate": 0.7,
+  "initial_checking_min": 20000,
+  "initial_checking_max": 60000,
+  "initial_savings_min": 20000,
+  "initial_savings_max": 60000,
+  "initial_balance_scale": 1.0,
+  "max_debit_fraction": 0.05,
+  "strict_valid_workload": true,
+  "balance_ratio": 0.3,
+  "deposit_checking_ratio": 0.3,
+  "transact_savings_ratio": 0.1,
+  "amalgamate_ratio": 0.1,
+  "write_check_ratio": 0.1,
+  "send_payment_ratio": 0.1
+}

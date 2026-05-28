@@ -1,0 +1,11 @@
+{
+  "dataset": "sb-write-10-hotspot-block10",
+  "benchmark": "smallbank",
+  "description": "10 write transactions; all senders transfer to the same hot destination account.",
+  "account_count": 11,
+  "operation_count": 10,
+  "operations": [
+    "SendPayment"
+  ],
+  "hot_destination_account_id": "99999"
+}

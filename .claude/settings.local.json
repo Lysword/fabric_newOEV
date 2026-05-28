@@ -8,7 +8,9 @@
       "Bash(python *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(go build *)",
+      "Bash(git -C .. status --short)"
     ]
   }
 }

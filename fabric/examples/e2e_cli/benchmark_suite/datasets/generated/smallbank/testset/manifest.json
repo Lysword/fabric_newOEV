@@ -1,0 +1,24 @@
+{
+  "account_count": 10,
+  "benchmark": "smallbank",
+  "conflict_rate": 0.7,
+  "dataset_name": "testset",
+  "files": {
+    "init": "init_accounts.jsonl",
+    "manifest": "manifest.json",
+    "workload": "workload.jsonl"
+  },
+  "generated_at": "2026-05-24T14:14:28.475869+00:00",
+  "hot_account_ratio": 0.1,
+  "operation_count": 20,
+  "operation_mix": {
+    "Amalgamate": 3,
+    "Balance": 5,
+    "DepositChecking": 2,
+    "SendPayment": 4,
+    "TransactSavings": 3,
+    "WriteCheck": 3
+  },
+  "seed": 7,
+  "strict_valid_workload": true
+}

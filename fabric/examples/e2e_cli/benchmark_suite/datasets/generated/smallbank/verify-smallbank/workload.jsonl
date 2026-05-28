@@ -1,0 +1,12 @@
+{"account_id": "acct-000001", "amount": 277, "operation": "DepositChecking", "sequence": 1}
+{"account_id": "acct-000001", "amount": 119, "operation": "WriteCheck", "sequence": 2}
+{"destination_account_id": "acct-000002", "operation": "Amalgamate", "sequence": 3, "source_account_id": "acct-000007"}
+{"account_id": "acct-000001", "operation": "Balance", "sequence": 4}
+{"account_id": "acct-000001", "amount": 243, "operation": "DepositChecking", "sequence": 5}
+{"account_id": "acct-000001", "amount": 138, "operation": "TransactSavings", "sequence": 6}
+{"amount": 399, "destination_account_id": "acct-000007", "operation": "SendPayment", "sequence": 7, "source_account_id": "acct-000001"}
+{"destination_account_id": "acct-000003", "operation": "Amalgamate", "sequence": 8, "source_account_id": "acct-000001"}
+{"destination_account_id": "acct-000001", "operation": "Amalgamate", "sequence": 9, "source_account_id": "acct-000005"}
+{"account_id": "acct-000006", "amount": 6, "operation": "WriteCheck", "sequence": 10}
+{"account_id": "acct-000001", "amount": 124, "operation": "DepositChecking", "sequence": 11}
+{"destination_account_id": "acct-000005", "operation": "Amalgamate", "sequence": 12, "source_account_id": "acct-000001"}

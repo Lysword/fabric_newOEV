@@ -1,0 +1,21 @@
+{
+  "benchmark": "ycsb",
+  "dataset_name": "zipfset",
+  "distribution": "zipfian",
+  "files": {
+    "init": "init_records.jsonl",
+    "manifest": "manifest.json",
+    "workload": "workload.jsonl"
+  },
+  "generated_at": "2026-05-24T14:14:42.772651+00:00",
+  "operation_count": 100,
+  "operation_mix": {
+    "Insert": 12,
+    "Read": 41,
+    "Scan": 11,
+    "Update": 36
+  },
+  "record_count": 50,
+  "seed": 22,
+  "zipf_theta": 0.99
+}

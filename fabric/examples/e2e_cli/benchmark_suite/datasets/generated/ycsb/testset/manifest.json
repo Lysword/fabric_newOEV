@@ -1,0 +1,21 @@
+{
+  "benchmark": "ycsb",
+  "dataset_name": "testset",
+  "distribution": "uniform",
+  "files": {
+    "init": "init_records.jsonl",
+    "manifest": "manifest.json",
+    "workload": "workload.jsonl"
+  },
+  "generated_at": "2026-05-24T14:14:28.475940+00:00",
+  "operation_count": 20,
+  "operation_mix": {
+    "Insert": 2,
+    "Read": 11,
+    "Scan": 1,
+    "Update": 6
+  },
+  "record_count": 10,
+  "seed": 11,
+  "zipf_theta": 0.99
+}
