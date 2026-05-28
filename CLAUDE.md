@@ -86,3 +86,64 @@
 
 - 除非用户明确要求，不创建/修改项目文档。
 - 本轮任务结束后，需要明确告知用户新增/修改了哪些文档，以及产出结果的路径。
+
+---
+
+## 5. 项目背景（KV 意图超立方体架构改造）
+
+### 5.1 项目概述
+
+- **基座**：Hyperledger Fabric v1.0
+- **目标**：EOV 架构改造，解决高冲突场景下 MVCC 大量 tx 失败问题
+- **范围**：仅 KV 模型；benchmark 目标：`smallbank` 和 `ycsb`
+- **核心思路**：背书提取读写意图 → orderer 超立方体冲突检测 → 提交阶段按批次重放
+- **快速落地优先**：不要求完美架构，不要求支持任意合约
+
+### 5.2 硬性约束
+
+1. **只考虑 KV 模型**，不涉及关系型模型
+2. **系统链码（cscc/lscc/escc/vscc/qscc）必须不受影响**，始终走原有路径
+3. **非目标合约必须能回退到原 Fabric 流程**
+4. **超立方体冲突检测范围只在同一 block 内**，不跨 block
+5. **不要改动 `fabric/` 目录以外的内容**（规划文档放 `design/`）
+6. **benchmark chaincode 名称精确匹配**：`"smallbank"` 和 `"ycsb"`
+
+### 5.3 设计文档位置
+
+所有设计文档位于 `design/` 目录，采用渐进式披露结构：
+
+| 文件 | 内容 |
+|------|------|
+| `design/00-index.md` | 总目录，快速参考，改造点汇总 |
+| `design/01-current-arch.md` | 现有 EOV 架构、关键函数路径 |
+| `design/02-target-arch.md` | 新架构流程图、改造点 A/B/C/D |
+| `design/03-compatibility.md` | 兼容策略、混合 Block、降级开关 |
+| `design/04-data-structures.md` | Go 数据结构（TxIntent, BatchSchedule 等）|
+| `design/05-orderer-changes.md` | orderer 修改点与新增文件 |
+| `design/06-commit-changes.md` | kv_ledger.go 改造、重放引擎 |
+| `design/07-conflict-detection.md` | 冲突检测算法、图染色伪代码 |
+| `design/08-smallbank.md` | SmallBank 操作分析与重放实现 |
+| `design/09-ycsb.md` | YCSB 操作分析与重放实现 |
+| `design/10-risks-phases.md` | 风险规避、Phase 1-4 落地计划、文件清单 |
+| `design/11-open-questions.md` | 待确认问题、附录代码片段 |
+
+### 5.4 编码前必读规则
+
+**实现任何模块前，必须先读对应的设计文档**：
+
+- 实现 orderer 改动 → 先读 `design/05-orderer-changes.md`
+- 实现 commit 重放 → 先读 `design/06-commit-changes.md`
+- 实现 SmallBank → 先读 `design/08-smallbank.md`
+- 实现 YCSB → 先读 `design/09-ycsb.md`
+- 实现冲突检测 → 先读 `design/07-conflict-detection.md`
+- 有不确定的问题 → 先读 `design/11-open-questions.md`
+
+### 5.5 Phase 1 最小改动文件（快速参考）
+
+需要修改的现有文件：
+- `orderer/solo/consensus.go`：`chain.main()` 插入 `AnalyzeBatchAndSchedule`
+- `core/ledger/kvledger/kv_ledger.go`：`Commit()` 检测 BatchSchedule 分流
+
+需要新建的文件：
+- `core/bench/types.go`、`commit.go`、`replay_smallbank.go`、`statedb_interface.go`
+- `orderer/bench/extractor.go`、`extractor_smallbank.go`、`graph.go`、`analyzer.go`
