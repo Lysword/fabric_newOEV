@@ -29,7 +29,7 @@ func ExtractSmallBankIntent(txID, channelID, funcName string, args []string) *be
 		intent.ReadKeys = []string{sbAccountKey(args[0])}
 		intent.WriteKeys = nil
 	case "CreateAccount":
-		if len(args) < 2 {
+		if len(args) < 4 {
 			return nil
 		}
 		k := sbAccountKey(args[0])

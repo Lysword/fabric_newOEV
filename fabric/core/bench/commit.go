@@ -58,8 +58,10 @@ func replayTx(db *StateDBAdapter, ccName, funcName string, args []string) (map[s
 	switch ccName {
 	case ccSmallBank:
 		return replaySmallBank(db, funcName, args)
-	// case ccYCSB:
-	//     return replayYCSB(db, funcName, args) // Phase 2
+	// below by lyj
+	case ccYCSB:
+		return replayYCSB(db, funcName, args)
+	// end by lyj
 	default:
 		return nil, fmt.Errorf("unsupported chaincode for replay: %s", ccName)
 	}
@@ -134,6 +136,27 @@ func extractInvocationFromEnvBytes(envBytes []byte) (ccName string, funcName str
 		args = append(args, string(a))
 	}
 	return
+}
+
+// BuildTxIDIndexMap 构建 block 内 txID → txIndex 的映射，用于操作 txFilter
+func BuildTxIDIndexMap(block *cb.Block) map[string]int {
+	m := make(map[string]int)
+	for i, envBytes := range block.Data.Data {
+		env, err := utils.GetEnvelopeFromBlock(envBytes)
+		if err != nil {
+			continue
+		}
+		payload, err := utils.GetPayload(env)
+		if err != nil {
+			continue
+		}
+		chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+		if err != nil {
+			continue
+		}
+		m[chdr.TxId] = i
+	}
+	return m
 }
 
 // end by lyj

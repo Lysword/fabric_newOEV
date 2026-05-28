@@ -92,8 +92,10 @@ func extractIntentFromEnvBytes(envBytes []byte) *bench.TxIntent {
 	switch ccName {
 	case BenchmarkSmallBank:
 		return ExtractSmallBankIntent(chdr.TxId, chdr.ChannelId, funcName, strArgs)
-	// case BenchmarkYCSB:
-	//     return ExtractYCSBIntent(chdr.TxId, chdr.ChannelId, funcName, strArgs) // Phase 2
+	// below by lyj
+	case BenchmarkYCSB:
+		return ExtractYCSBIntent(chdr.TxId, chdr.ChannelId, funcName, strArgs)
+	// end by lyj
 	}
 	return nil
 }

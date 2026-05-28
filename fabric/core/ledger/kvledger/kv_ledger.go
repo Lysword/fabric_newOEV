@@ -30,6 +30,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr/lockbasedtxmgr"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
+	ledgerutil "github.com/hyperledger/fabric/core/ledger/util" // below by lyj // end by lyj
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 )
@@ -260,41 +261,63 @@ func (l *kvLedger) Commit(block *common.Block) error {
 // below by lyj
 
 // commitWithBatchSchedule benchmark block 的提交路径：
-// 1. 正常 MVCC 验证（非 benchmark tx 仍走原路径）
-// 2. 存储 block
-// 3. 提交 MVCC 验证结果（非 benchmark tx 写集）
-// 4. 按 BatchSchedule 重放 benchmark tx 并直接写入 stateDB
+// 预标记 benchmark tx 跳过 MVCC → 仅验证非 benchmark tx → 重放 benchmark tx → 提交
 func (l *kvLedger) commitWithBatchSchedule(block *common.Block, schedule *bench.BatchSchedule) error {
 	blockNo := block.Header.Number
 	logger.Infof("Channel [%s]: Block [%d] has BatchSchedule with %d batches, using bench commit path",
 		l.ledgerID, blockNo, len(schedule.Batches))
 
-	// Step 1: MVCC 验证所有 tx（benchmark tx 冲突会被标记 INVALID，后续重放会覆盖）
-	logger.Debugf("Channel [%s]: Validating block [%d] (MVCC)", l.ledgerID, blockNo)
+	// Step 1: 构建 benchmark txID → txIndex 映射
+	benchTxIDs := schedule.AllTxIDs()
+	txIDToIndex := bench.BuildTxIDIndexMap(block)
+
+	// Step 2: 初始化 txFilter，将 benchmark tx 预标记为 NOT_VALIDATED 以跳过 MVCC 校验
+	txsFilter := ledgerutil.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	if len(txsFilter) == 0 {
+		txsFilter = ledgerutil.NewTxValidationFlags(len(block.Data.Data))
+	}
+	for txID := range benchTxIDs {
+		if idx, ok := txIDToIndex[txID]; ok {
+			txsFilter.SetFlag(idx, peer.TxValidationCode_NOT_VALIDATED)
+		}
+	}
+	block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsFilter
+
+	// Step 3: MVCC 验证 — benchmark tx 已被标记跳过，仅验证非 benchmark tx
+	logger.Debugf("Channel [%s]: Validating block [%d] (MVCC, benchmark tx skipped)", l.ledgerID, blockNo)
 	if err := l.txtmgmt.ValidateAndPrepare(block, true); err != nil {
 		return err
 	}
 
-	// Step 2: 存储 block
+	// Step 4: 将 benchmark tx 标记回 VALID（orderer 超立方体冲突检测已保证正确性）
+	txsFilter = ledgerutil.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	for txID := range benchTxIDs {
+		if idx, ok := txIDToIndex[txID]; ok {
+			txsFilter.SetFlag(idx, peer.TxValidationCode_VALID)
+		}
+	}
+	block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsFilter
+
+	// Step 5: 存储 block（txFilter 已包含最终状态）
 	logger.Debugf("Channel [%s]: Committing block [%d] to storage", l.ledgerID, blockNo)
 	if err := l.blockStore.AddBlock(block); err != nil {
 		return err
 	}
 	logger.Infof("Channel [%s]: Created block [%d] with %d transaction(s)", l.ledgerID, blockNo, len(block.Data.Data))
 
-	// Step 3: 提交 MVCC 验证结果（非 benchmark tx 的写集；benchmark tx 若通过 MVCC 也会写入，后续重放覆盖）
+	// Step 6: 按 BatchSchedule 重放 benchmark tx（在 txtmgmt.Commit 之前，读取干净的 pre-block 状态）
+	logger.Debugf("Channel [%s]: Replaying benchmark tx for block [%d]", l.ledgerID, blockNo)
+	if err := bench.CommitBenchmarkTxs(block, schedule, l.versionedDB); err != nil {
+		return err
+	}
+
+	// Step 7: 提交非 benchmark tx 的写集（benchmark tx 未进入 updateBatch，不会重复写入）
 	logger.Debugf("Channel [%s]: Committing block [%d] validated writes to state database", l.ledgerID, blockNo)
 	if err := l.txtmgmt.Commit(); err != nil {
 		panic(fmt.Errorf(`Error during commit to txmgr:%s`, err))
 	}
 
-	// Step 4: 按 batch 顺序重放 benchmark tx，结果直接写入 stateDB
-	logger.Debugf("Channel [%s]: Replaying benchmark tx for block [%d]", l.ledgerID, blockNo)
-	if err := bench.CommitBenchmarkTxs(block, schedule, l.versionedDB); err != nil {
-		logger.Warningf("Channel [%s]: Benchmark replay error in block [%d]: %s", l.ledgerID, blockNo, err)
-	}
-
-	// Step 5: History DB
+	// Step 8: History DB
 	if ledgerconfig.IsHistoryDBEnabled() {
 		logger.Debugf("Channel [%s]: Committing block [%d] transactions to history database", l.ledgerID, blockNo)
 		if err := l.historyDB.Commit(block); err != nil {
