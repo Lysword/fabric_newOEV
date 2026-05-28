@@ -3,6 +3,8 @@ package bench
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/flogging"
@@ -21,36 +23,115 @@ const (
 	ccYCSB      = "ycsb"
 )
 
+// txReplayResult 单笔 tx 并行重放的结果
+type txReplayResult struct {
+	txID   string
+	ccName string
+	writes map[string][]byte
+	err    error
+}
+
 // CommitBenchmarkTxs 按 BatchSchedule 的 batch 顺序重放 benchmark tx 并写入 stateDB
+// batch 间串行保证因果顺序，同 batch 内并行（图着色保证无冲突）
 func CommitBenchmarkTxs(block *cb.Block, schedule *BatchSchedule, db statedb.VersionedDB) error {
 	adapter := NewStateDBAdapter(db, block.Header.Number, len(block.Data.Data))
 
-	for _, batchEntry := range schedule.Batches {
-		for _, txID := range batchEntry.TxIDs {
-			envBytes := findTxInBlock(block, txID)
-			if envBytes == nil {
-				logger.Warningf("tx %s not found in block %d", txID, block.Header.Number)
-				continue
-			}
-			ccName, funcName, strArgs, err := extractInvocationFromEnvBytes(envBytes)
-			if err != nil {
-				logger.Warningf("tx %s: extract invocation failed: %s", txID, err)
-				continue
-			}
-
-			writes, err := replayTx(adapter, ccName, funcName, strArgs)
-			if err != nil {
-				logger.Warningf("tx %s: replay %s.%s failed: %s", txID, ccName, funcName, err)
-				continue
-			}
-
-			for key, value := range writes {
-				adapter.PutState(ccName, key, value)
-			}
-		}
+	totalTxCount := 0
+	for _, b := range schedule.Batches {
+		totalTxCount += len(b.TxIDs)
 	}
 
-	return adapter.Flush()
+	replayStart := time.Now()
+	logger.Infof("Block [%d]: starting benchmark replay — %d tx in %d batches",
+		block.Header.Number, totalTxCount, len(schedule.Batches))
+
+	for batchIdx, batchEntry := range schedule.Batches {
+		batchStart := time.Now()
+		txCount := len(batchEntry.TxIDs)
+
+		if txCount <= 1 {
+			// 单 tx batch 无需并行开销，直接串行
+			for _, txID := range batchEntry.TxIDs {
+				replaySingleTx(adapter, block, txID)
+			}
+		} else {
+			// 同 batch 内多 tx 并行重放
+			results := make([]txReplayResult, txCount)
+			var wg sync.WaitGroup
+			wg.Add(txCount)
+
+			for i, txID := range batchEntry.TxIDs {
+				go func(idx int, tid string) {
+					defer wg.Done()
+					results[idx] = replayTxForParallel(adapter, block, tid)
+				}(i, txID)
+			}
+			wg.Wait()
+
+			// 串行合并所有写入（保证确定性）
+			for _, r := range results {
+				if r.err != nil {
+					logger.Warningf("tx %s: parallel replay failed: %s", r.txID, r.err)
+					continue
+				}
+				for key, value := range r.writes {
+					adapter.PutState(r.ccName, key, value)
+				}
+			}
+		}
+
+		logger.Infof("Block [%d]: batch %d/%d completed — %d tx in %v",
+			block.Header.Number, batchIdx+1, len(schedule.Batches), txCount, time.Since(batchStart))
+	}
+
+	replayElapsed := time.Since(replayStart)
+	flushStart := time.Now()
+	err := adapter.Flush()
+	flushElapsed := time.Since(flushStart)
+
+	logger.Infof("Block [%d]: benchmark replay done — %d tx, %d batches, replay %v, flush %v",
+		block.Header.Number, totalTxCount, len(schedule.Batches), replayElapsed, flushElapsed)
+
+	return err
+}
+
+// replaySingleTx 串行重放单笔 tx 并直接写入 adapter
+func replaySingleTx(adapter *StateDBAdapter, block *cb.Block, txID string) {
+	envBytes := findTxInBlock(block, txID)
+	if envBytes == nil {
+		logger.Warningf("tx %s not found in block %d", txID, block.Header.Number)
+		return
+	}
+	ccName, funcName, strArgs, err := extractInvocationFromEnvBytes(envBytes)
+	if err != nil {
+		logger.Warningf("tx %s: extract invocation failed: %s", txID, err)
+		return
+	}
+	writes, err := replayTx(adapter, ccName, funcName, strArgs)
+	if err != nil {
+		logger.Warningf("tx %s: replay %s.%s failed: %s", txID, ccName, funcName, err)
+		return
+	}
+	for key, value := range writes {
+		adapter.PutState(ccName, key, value)
+	}
+}
+
+// replayTxForParallel 并行安全的 tx 重放，返回结果而不直接写 adapter
+func replayTxForParallel(adapter *StateDBAdapter, block *cb.Block, txID string) txReplayResult {
+	envBytes := findTxInBlock(block, txID)
+	if envBytes == nil {
+		return txReplayResult{txID: txID, err: fmt.Errorf("tx not found in block %d", block.Header.Number)}
+	}
+	ccName, funcName, strArgs, err := extractInvocationFromEnvBytes(envBytes)
+	if err != nil {
+		return txReplayResult{txID: txID, err: fmt.Errorf("extract invocation failed: %s", err)}
+	}
+	writes, err := replayTx(adapter, ccName, funcName, strArgs)
+	if err != nil {
+		return txReplayResult{txID: txID, err: fmt.Errorf("replay %s.%s failed: %s", ccName, funcName, err)}
+	}
+	return txReplayResult{txID: txID, ccName: ccName, writes: writes}
 }
 
 // replayTx 根据链码名称分派到对应的重放引擎

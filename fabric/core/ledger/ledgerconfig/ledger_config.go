@@ -79,6 +79,18 @@ func IsHistoryDBEnabled() bool {
 	return viper.GetBool("ledger.history.enableHistoryDatabase")
 }
 
+// below by lyj
+
+//IsBenchReplayEnabled exposes the bench replay switch
+func IsBenchReplayEnabled() bool {
+	if !viper.IsSet("ledger.bench.enableReplay") {
+		return true
+	}
+	return viper.GetBool("ledger.bench.enableReplay")
+}
+
+// end by lyj
+
 // IsQueryReadsHashingEnabled enables or disables computing of hash
 // of range query results for phantom item validation
 func IsQueryReadsHashingEnabled() bool {

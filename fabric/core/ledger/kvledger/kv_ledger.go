@@ -224,9 +224,11 @@ func (l *kvLedger) Commit(block *common.Block) error {
 	blockNo := block.Header.Number
 
 	// below by lyj
-	schedule, hasBatchSchedule := bench.ParseBatchSchedule(block)
-	if hasBatchSchedule {
-		return l.commitWithBatchSchedule(block, schedule)
+	if ledgerconfig.IsBenchReplayEnabled() {
+		schedule, hasBatchSchedule := bench.ParseBatchSchedule(block)
+		if hasBatchSchedule {
+			return l.commitWithBatchSchedule(block, schedule)
+		}
 	}
 	// end by lyj
 
@@ -270,6 +272,9 @@ func (l *kvLedger) commitWithBatchSchedule(block *common.Block, schedule *bench.
 	// Step 1: 构建 benchmark txID → txIndex 映射
 	benchTxIDs := schedule.AllTxIDs()
 	txIDToIndex := bench.BuildTxIDIndexMap(block)
+	nonBenchCount := len(block.Data.Data) - len(benchTxIDs)
+	logger.Infof("Channel [%s]: Block [%d] tx breakdown — %d benchmark, %d non-benchmark, %d total",
+		l.ledgerID, blockNo, len(benchTxIDs), nonBenchCount, len(block.Data.Data))
 
 	// Step 2: 初始化 txFilter，将 benchmark tx 预标记为 NOT_VALIDATED 以跳过 MVCC 校验
 	txsFilter := ledgerutil.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])

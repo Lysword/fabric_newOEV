@@ -434,3 +434,12 @@ ledger:
     # All history 'index' will be stored in goleveldb, regardless if using
     # CouchDB or alternate database for the state.
     enableHistoryDatabase: true
+
+  # below by lyj
+  bench:
+    # enableReplay - options are true or false
+    # When true, benchmark tx (smallbank/ycsb) use hypercube conflict detection
+    # and batch replay instead of MVCC validation.
+    # When false, all tx go through the original MVCC path.
+    enableReplay: true
+  # end by lyj
