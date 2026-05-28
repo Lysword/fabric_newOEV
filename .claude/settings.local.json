@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(doc)",
+      "Bash(python3 -c \"import docx; print\\('python-docx available'\\)\")",
+      "Bash(pip install *)",
+      "Bash(python3 -c \"import docx; print\\('OK'\\)\")",
+      "Bash(python *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  }
+}
